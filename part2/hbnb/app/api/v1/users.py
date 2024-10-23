@@ -1,45 +1,61 @@
-"""Users API endpoints"""
+"""
+Implement API endpoints for user management and operations
+"""
 
 from flask import request, current_app
 from flask_restx import Namespace, Resource, fields
 
-api = Namespace('user', description='User operations')
+api = Namespace('users', description='User operations')
 
-user_model = api.model('User', {
-    'email': fields.String(required=True),
-    'password': fields.String(required=True),
-    'first_name': fields.String(),
-    'last_name': fields.String()
+# API Models
+user_model = api.model('UserInput', {
+    'first_name': fields.String(description='User first name'),
+    'last_name': fields.String(description='User last name'),
+    'email': fields.String(required=True, description='User email')
+})
+
+user_response = api.model('UserResponse', {
+    'id': fields.String(description='User ID'),
+    'first_name': fields.String(description='User first name'),
+    'last_name': fields.String(description='User last name'),
+    'email': fields.String(description='User email')
 })
 
 @api.route('/')
 class UserList(Resource):
-    @api.marshal_list_with(user_model)
-    def get(self):
-        """List users"""
-        return current_app.facade.get_all_users()
-
+    @api.doc('create_user')
     @api.expect(user_model)
-    @api.response(201, 'User created')
     def post(self):
-        """Create user"""
-        return current_app.facade.create_user(request.json), 201
+        """Create a new user"""
+        try:
+            data = request.json.copy()
+            data['password'] = 'defaultpassword'
+            user = current_app.facade.create_user(data)
+            return user.to_dict(), 200
+        except ValueError:
+            return {"error": "Invalid input data"}, 400
 
-@api.route('/<user_id>')
-class UserResource(Resource):
-    @api.marshal_with(user_model)
+@api.route('/<string:user_id>')
+@api.param('user_id', 'User identifier')
+class User(Resource):
+    @api.doc('get_user')
+    @api.marshal_with(user_response)
     def get(self, user_id):
-        """Get user details"""
+        """Retrieve a user by ID"""
         user = current_app.facade.get_user(user_id)
         if not user:
-            api.abort(404)
+            api.abort(404, "User not found")
         return user
 
+    @api.doc('update_user')
     @api.expect(user_model)
-    @api.marshal_with(user_model)
+    @api.marshal_with(user_response)
     def put(self, user_id):
-        """Update user"""
-        user = current_app.facade.update_user(user_id, request.json)
-        if not user:
-            api.abort(404)
-        return user
+        """Update a user"""
+        try:
+            user = current_app.facade.update_user(user_id, request.json)
+            if not user:
+                api.abort(404, "User not found")
+            return user
+        except ValueError as e:
+            api.abort(400, str(e))

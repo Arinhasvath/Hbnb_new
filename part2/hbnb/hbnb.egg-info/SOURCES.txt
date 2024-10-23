@@ -2,12 +2,13 @@ setup.py
 app/__init__.py
 app/api/__init__.py
 app/api/v1/__init__.py
-app/api/v1/amenity.py
-app/api/v1/place.py
-app/api/v1/review.py
+app/api/v1/amenities.py
+app/api/v1/places.py
+app/api/v1/reviews.py
 app/api/v1/users.py
 app/models/__init__.py
 app/models/amenity.py
+app/models/base_model.py
 app/models/place.py
 app/models/review.py
 app/models/user.py
