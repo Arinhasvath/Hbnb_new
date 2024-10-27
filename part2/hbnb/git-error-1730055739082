@@ -1,6 +1,0 @@
-> git pull --tags origin Ari
-git@github.com: Permission denied (publickey).
-fatal : Impossible de lire le dépôt distant.
-
-Veuillez vérifier que vous avez les droits d'accès
-et que le dépôt existe.

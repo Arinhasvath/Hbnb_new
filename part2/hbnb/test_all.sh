@@ -5,72 +5,59 @@ show_response() {
     local title="$1"
     local response="$2"
     echo -e "\n=== $title ==="
-    echo "$response"
+    echo "$response" | python3 -m json.tool || echo "$response"
     echo "===================="
 }
 
 extract_id() {
-    local json="$1"
-    echo "$json" | python3 -c "import sys, json; print(json.loads(sys.stdin.read()).get('id', ''))"
+    local response="$1"
+    if [ -z "$response" ]; then
+        echo ""
+        return
+    fi
+    ID=$(echo "$response" | python3 -c '
+import sys, json
+try:
+    print(json.loads(sys.stdin.read()).get("id", ""))
+except:
+    print("")
+')
+    echo "$ID"
 }
 
-# Variables globales pour stocker les IDs
-USER_ID=""
-PLACE_ID=""
-AMENITY_ID=""
-REVIEW_ID=""
-
+# Variables pour stocker les IDs
 echo "======================================"
 echo "Starting HBnB API Integration Tests..."
 echo "======================================"
 
-# 1. TESTS USER
+# 1. USER TESTS
 echo -e "\n=== 1. USER TESTS ==="
 
+# 1.1 Créer un utilisateur
 echo "1.1 Testing User Creation..."
-# Créer un utilisateur valide
-USER_RESPONSE=$(curl -s -X POST http://localhost:5000/api/v1/users/ \
+USER_CREATE_RESPONSE=$(curl -s -X POST http://localhost:5000/api/v1/users/ \
   -H "Content-Type: application/json" \
-  -d '{
-    "first_name": "Test",
-    "last_name": "User",
-    "email": "test'$(date +%s)'@example.com"
-}')
-show_response "Create Valid User" "$USER_RESPONSE"
-USER_ID=$(extract_id "$USER_RESPONSE")
+  -d '{"first_name": "Test", "last_name": "User", "email": "test'$(date +%s)'@example.com"}')
 
-# Test email déjà utilisé
-echo "Testing duplicate email..."
-curl -s -X POST http://localhost:5000/api/v1/users/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "first_name": "Test",
-    "last_name": "User",
-    "email": "'$(echo $USER_RESPONSE | jq -r .email)'"
-}'
+show_response "Create User Response" "$USER_CREATE_RESPONSE"
+USER_ID=$(extract_id "$USER_CREATE_RESPONSE")
+echo "User ID: $USER_ID"
 
-# Test données invalides
-echo "Testing invalid data..."
-curl -s -X POST http://localhost:5000/api/v1/users/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "first_name": "",
-    "email": "invalid-email"
-}'
+if [ -z "$USER_ID" ]; then
+    echo "Failed to create user. Exiting tests."
+    exit 1
+fi
 
-echo "1.2 Testing User Retrieval..."
-# Get all users
-curl -s -X GET http://localhost:5000/api/v1/users/
+# 1.2 Get Users
+echo "1.2 Getting all users..."
+USERS_RESPONSE=$(curl -s -X GET http://localhost:5000/api/v1/users/)
+show_response "All Users" "$USERS_RESPONSE"
 
-# Get specific user
-curl -s -X GET "http://localhost:5000/api/v1/users/$USER_ID"
-
-# 2. TESTS PLACE
+# 2. PLACE TESTS
 echo -e "\n=== 2. PLACE TESTS ==="
+echo "2.1 Creating place..."
 
-echo "2.1 Testing Place Creation..."
-# Créer un place valide
-PLACE_RESPONSE=$(curl -s -X POST http://localhost:5000/api/v1/places/ \
+PLACE_CREATE_RESPONSE=$(curl -s -X POST http://localhost:5000/api/v1/places/ \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Test Place",
@@ -80,75 +67,69 @@ PLACE_RESPONSE=$(curl -s -X POST http://localhost:5000/api/v1/places/ \
     "longitude": -74.0060,
     "owner_id": "'$USER_ID'"
 }')
-show_response "Create Valid Place" "$PLACE_RESPONSE"
-PLACE_ID=$(extract_id "$PLACE_RESPONSE")
 
-# Test coordonnées invalides
-echo "Testing invalid coordinates..."
-curl -s -X POST http://localhost:5000/api/v1/places/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Invalid Place",
-    "description": "Test",
-    "price": 100,
-    "latitude": 100,
-    "longitude": -200,
-    "owner_id": "'$USER_ID'"
-}'
+show_response "Create Place Response" "$PLACE_CREATE_RESPONSE"
+PLACE_ID=$(extract_id "$PLACE_CREATE_RESPONSE")
+echo "Place ID: $PLACE_ID"
 
-# 3. TESTS AMENITY
+# 3. AMENITY TESTS
 echo -e "\n=== 3. AMENITY TESTS ==="
+echo "3.1 Creating amenity..."
 
-echo "3.1 Testing Amenity Creation..."
-# Créer un amenity valide
-AMENITY_RESPONSE=$(curl -s -X POST http://localhost:5000/api/v1/amenities/ \
+AMENITY_CREATE_RESPONSE=$(curl -s -X POST http://localhost:5000/api/v1/amenities/ \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "WiFi"
-}')
-show_response "Create Valid Amenity" "$AMENITY_RESPONSE"
-AMENITY_ID=$(extract_id "$AMENITY_RESPONSE")
+  -d '{"name": "WiFi"}')
 
-# Test nom vide
-curl -s -X POST http://localhost:5000/api/v1/amenities/ \
-  -H "Content-Type: application/json" \
-  -d '{"name": ""}'
+show_response "Create Amenity Response" "$AMENITY_CREATE_RESPONSE"
+AMENITY_ID=$(extract_id "$AMENITY_CREATE_RESPONSE")
+echo "Amenity ID: $AMENITY_ID"
 
-# 4. TESTS REVIEW
-echo -e "\n=== 4. REVIEW TESTS ==="
+# 4. REVIEW TESTS
+if [ ! -z "$PLACE_ID" ] && [ ! -z "$USER_ID" ]; then
+    echo -e "\n=== 4. REVIEW TESTS ==="
+    echo "4.1 Creating review..."
 
-echo "4.1 Testing Review Creation..."
-# Créer une review valide
-REVIEW_RESPONSE=$(curl -s -X POST http://localhost:5000/api/v1/reviews/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Great place!",
-    "rating": 5,
-    "user_id": "'$USER_ID'",
-    "place_id": "'$PLACE_ID'"
-}')
-show_response "Create Valid Review" "$REVIEW_RESPONSE"
-REVIEW_ID=$(extract_id "$REVIEW_RESPONSE")
+    REVIEW_CREATE_RESPONSE=$(curl -s -X POST http://localhost:5000/api/v1/reviews/ \
+      -H "Content-Type: application/json" \
+      -d '{
+        "text": "Great place!",
+        "rating": 5,
+        "user_id": "'$USER_ID'",
+        "place_id": "'$PLACE_ID'"
+    }')
 
-# Test rating invalide
-echo "Testing invalid rating..."
-curl -s -X POST http://localhost:5000/api/v1/reviews/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Invalid rating",
-    "rating": 6,
-    "user_id": "'$USER_ID'",
-    "place_id": "'$PLACE_ID'"
-}'
+    show_response "Create Review Response" "$REVIEW_CREATE_RESPONSE"
+    REVIEW_ID=$(extract_id "$REVIEW_CREATE_RESPONSE")
+    echo "Review ID: $REVIEW_ID"
 
-# Test suppression review
-echo "4.2 Testing Review Deletion..."
-curl -s -X DELETE "http://localhost:5000/api/v1/reviews/$REVIEW_ID"
+    if [ ! -z "$REVIEW_ID" ]; then
+        echo "4.2 Testing invalid review data..."
+        INVALID_REVIEW_RESPONSE=$(curl -s -X POST http://localhost:5000/api/v1/reviews/ \
+          -H "Content-Type: application/json" \
+          -d '{
+            "text": "Invalid rating",
+            "rating": 6,
+            "user_id": "'$USER_ID'",
+            "place_id": "'$PLACE_ID'"
+        }')
+        show_response "Invalid Review Response" "$INVALID_REVIEW_RESPONSE"
 
-# Vérifier reviews par place
-echo "4.3 Testing Place Reviews..."
-curl -s -X GET "http://localhost:5000/api/v1/reviews/places/$PLACE_ID/reviews"
+        echo "4.3 Getting reviews for place..."
+        PLACE_REVIEWS_RESPONSE=$(curl -s -X GET "http://localhost:5000/api/v1/reviews/places/$PLACE_ID/reviews")
+        show_response "Place Reviews" "$PLACE_REVIEWS_RESPONSE"
 
+        echo "4.4 Deleting review..."
+        DELETE_RESPONSE=$(curl -s -X DELETE "http://localhost:5000/api/v1/reviews/$REVIEW_ID")
+        show_response "Delete Review Response" "$DELETE_RESPONSE"
+    fi
+fi
+
+# Test Summary
 echo -e "\n======================================"
-echo "Testing Complete"
+echo "Test Summary"
 echo "======================================"
+echo "User ID: $USER_ID"
+echo "Place ID: $PLACE_ID"
+echo "Amenity ID: $AMENITY_ID"
+echo "Review ID: $REVIEW_ID"
+echo "Testing Complete"

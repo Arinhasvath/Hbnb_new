@@ -11,6 +11,10 @@ amenity_model = api.model('Amenity', {
     'updated_at': fields.DateTime(readonly=True)
 })
 
+def validate_amenity_name(name):
+    if not name or not name.strip():
+        raise ValueError("Amenity name cannot be empty")
+
 @api.route('/')
 class AmenityList(Resource):
     @api.doc('list_amenities')
@@ -28,6 +32,7 @@ class AmenityList(Resource):
     def post(self):
         """Create a new amenity"""
         try:
+            validate_amenity_name(api.payload['name'])
             return facade.create_amenity(api.payload), 201
         except ValueError as e:
             api.abort(400, str(e))
@@ -60,6 +65,7 @@ class AmenityResource(Resource):
             if amenity is None:
                 api.abort(404, f"Amenity {amenity_id} not found")
             
+            validate_amenity_name(api.payload['name'])
             updated_amenity = facade.update_amenity(amenity_id, api.payload)
             return updated_amenity
         except ValueError as e:
